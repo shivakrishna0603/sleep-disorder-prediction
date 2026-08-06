@@ -12,9 +12,6 @@ import os
 import plotly.graph_objects as go
 import plotly.express as px
 
-from streamlit_option_menu import option_menu
-from streamlit_extras.metric_cards import style_metric_cards
-
 # ── Page Config ───────────────────────────────────────────────
 st.set_page_config(
     page_title="Sleep Disorder Predictor",
@@ -52,14 +49,22 @@ def load_artifacts():
     scaler    = pickle.load(open(os.path.join(MODEL_DIR, 'scaler.pkl'), 'rb'))
     le_target = pickle.load(open(os.path.join(MODEL_DIR, 'label_encoder.pkl'), 'rb'))
     features  = pickle.load(open(os.path.join(MODEL_DIR, 'feature_names.pkl'), 'rb'))
-    return model, scaler, le_target, features
+    # The exact LabelEncoders fit at training time — using these instead of
+    # hand-typed maps guarantees inputs are encoded exactly the way the
+    # model expects (same class-to-number mapping, same class set).
+    cat_encoders = pickle.load(open(os.path.join(MODEL_DIR, 'cat_encoders.pkl'), 'rb'))
+    return model, scaler, le_target, features, cat_encoders
 
 try:
-    model, scaler, le_target, feature_names = load_artifacts()
+    model, scaler, le_target, feature_names, cat_encoders = load_artifacts()
     model_loaded = True
 except Exception as e:
     model_loaded = False
     st.error(f"⚠️ Model not found. Please run `02_model_training.py` first.\n\nError: {e}")
+
+GENDER_OPTIONS     = list(cat_encoders['Gender'].classes_) if model_loaded else ['Female', 'Male']
+OCCUPATION_OPTIONS = list(cat_encoders['Occupation'].classes_) if model_loaded else []
+BMI_OPTIONS        = list(cat_encoders['BMI Category'].classes_) if model_loaded else []
 
 # ── Header ────────────────────────────────────────────────────
 # ── Professional Header ───────────────────────────────────────
@@ -117,14 +122,8 @@ with st.sidebar:
     st.success("🟢 System Status : Online")
 
     st.metric(
-        label="🎯 Model Accuracy",
-        value="94.6%",
-        delta="+2.3%"
-    )
-
-    st.metric(
-        label="📊 Predictions",
-        value="15,000+"
+        label="🎯 Model Test Accuracy",
+        value="96.0%"
     )
 
     st.metric(
@@ -194,7 +193,7 @@ with st.sidebar:
 colA, colB, colC, colD = st.columns(4)
 
 with colA:
-    st.metric("🎯 Accuracy", "94.6%")
+    st.metric("🎯 Accuracy", "96.0%")
 
 with colB:
     st.metric("🤖 Model", "Random Forest")
@@ -228,13 +227,9 @@ with col1:
         ### 👤 Personal Information
         Please enter your demographic details.
         """)
-            gender = st.selectbox("Gender", ["Male", "Female"])
+            gender = st.selectbox("Gender", GENDER_OPTIONS)
             age    = st.slider("Age", 18, 80, 30)
-            occupation = st.selectbox("Occupation", [
-                "Software Engineer", "Doctor", "Sales Representative",
-                "Teacher", "Nurse", "Engineer", "Accountant",
-                "Scientist", "Lawyer", "Manager", "Other"
-            ])
+            occupation = st.selectbox("Occupation", OCCUPATION_OPTIONS)
 
 with col2:
             st.markdown("""
@@ -254,10 +249,7 @@ with col3:
             """)
                 physical_activity = st.slider("Physical Activity Level (min/day)", 0, 120, 45)
                 stress_level = st.slider("Stress Level (1-10)", 1, 10, 5)
-                bmi_category = st.selectbox(
-                    "BMI Category",
-                    ["Normal", "Overweight", "Obese", "Normal Weight"]
-                )
+                bmi_category = st.selectbox("BMI Category", BMI_OPTIONS)
                 daily_steps = st.slider("Daily Steps", 1000, 20000, 8000, 500)
 
 st.divider()
@@ -272,17 +264,10 @@ if predict:
     if not model_loaded:
         st.error("Model not loaded. Please train the model first.")
     else:
-        # Encode inputs the same way as training
-        gender_enc   = 0 if gender == "Male" else 1
-        bmi_map      = {"Normal": 0, "Normal Weight": 1, "Obese": 2, "Overweight": 3}
-        bmi_enc      = bmi_map.get(bmi_category, 0)
-
-        occ_map = {
-            "Accountant": 0, "Doctor": 1, "Engineer": 2, "Lawyer": 3,
-            "Manager": 4, "Nurse": 5, "Other": 6, "Sales Representative": 7,
-            "Scientist": 8, "Software Engineer": 9, "Teacher": 10
-        }
-        occ_enc = occ_map.get(occupation, 9)
+        # Encode inputs using the SAME encoders fit during training
+        gender_enc = int(cat_encoders['Gender'].transform([gender])[0])
+        occ_enc    = int(cat_encoders['Occupation'].transform([occupation])[0])
+        bmi_enc    = int(cat_encoders['BMI Category'].transform([bmi_category])[0])
 
         # Build input row — must match feature_names order from training
         input_dict = {
