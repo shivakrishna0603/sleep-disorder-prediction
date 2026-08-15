@@ -33,16 +33,7 @@ st.markdown(
 <style>
     #MainMenu, footer {visibility: hidden;}
     header[data-testid="stHeader"] { background: transparent; }
-    button[data-testid="stBaseButton-headerNoPadding"],
-    div[data-testid="collapsedControl"],
-    button[data-testid="stExpandSidebarButton"],
-    button[data-testid="stSidebarCollapseButton"] {
-        visibility: visible !important;
-        display: flex !important;
-        opacity: 1 !important;
-    }
-    /* Hide only the Deploy button, not the whole header toolbar */
-    button[data-testid="stAppDeployButton"] { display: none !important; }
+    div[data-testid="stToolbar"] { visibility: hidden; }
 
     :root {
         --ink: #23264A;
