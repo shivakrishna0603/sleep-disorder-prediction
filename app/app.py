@@ -1,422 +1,547 @@
 # ============================================================
-# app.py — Streamlit Web App
+# app.py — Streamlit Web App (v3: model upgrade + new features)
 # Sleep Disorder Prediction Using Wearable Sensor Data
 # ============================================================
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import pickle
 import os
+import io
+import pickle
+from datetime import datetime
 
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
+import streamlit as st
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 # ── Page Config ───────────────────────────────────────────────
 st.set_page_config(
     page_title="Sleep Disorder Predictor",
     page_icon="🛌",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────
-st.markdown("""
+# ── Theme / Custom CSS ───────────────────────────────────────────
+st.markdown(
+    """
 <style>
-    .main-header {
-        font-size: 2.2rem; font-weight: 700;
-        color: #1a237e; text-align: center; margin-bottom: 0.2rem;
+    #MainMenu, footer, header {visibility: hidden;}
+
+    .stApp {
+        background: radial-gradient(circle at 10% 0%, #1b1f3b 0%, #0f1226 45%, #0a0c1a 100%);
     }
-    .sub-header {
-        font-size: 1rem; color: #555; text-align: center; margin-bottom: 2rem;
+
+    .hero {
+        background: linear-gradient(135deg, #6a5cff 0%, #8f6bff 45%, #4facfe 100%);
+        border-radius: 24px;
+        padding: 2.6rem 2rem;
+        text-align: center;
+        margin-bottom: 1.6rem;
+        box-shadow: 0 20px 40px -20px rgba(106, 92, 255, 0.6);
     }
-    .result-box {
-        padding: 1.5rem; border-radius: 12px;
-        text-align: center; font-size: 1.4rem; font-weight: bold;
+    .hero h1 { color: white; font-size: 2.4rem; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+    .hero p { color: rgba(255,255,255,0.9); font-size: 1.05rem; margin-top: 0.5rem; }
+
+    .card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1rem;
+        backdrop-filter: blur(6px);
     }
-    .none      { background: #e8f5e9; color: #2e7d32; border: 2px solid #4caf50; }
-    .insomnia  { background: #fff3e0; color: #e65100; border: 2px solid #ff9800; }
-    .apnea     { background: #fce4ec; color: #880e4f; border: 2px solid #e91e63; }
+    .card h4 { margin-top: 0; color: #e6e6ff; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    .result-box { padding: 1.8rem; border-radius: 18px; text-align: center; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.08); }
+    .result-box .label { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.2rem; }
+    .result-box .sub { font-size: 0.95rem; opacity: 0.85; }
+
+    .none      { background: linear-gradient(135deg, rgba(76,175,80,0.18), rgba(76,175,80,0.05)); color: #7fe08a; }
+    .insomnia  { background: linear-gradient(135deg, rgba(255,152,0,0.20), rgba(255,152,0,0.05)); color: #ffb85c; }
+    .apnea     { background: linear-gradient(135deg, rgba(233,30,99,0.20), rgba(233,30,99,0.05)); color: #ff7fae; }
+
+    .advice-box {
+        border-radius: 14px; padding: 1rem 1.2rem; font-size: 0.95rem;
+        background: rgba(255,255,255,0.05); border-left: 4px solid #8f6bff; color: #e6e6ff;
+    }
+
+    .stButton>button, .stDownloadButton>button {
+        background: linear-gradient(135deg, #6a5cff, #4facfe);
+        color: white; border: none; border-radius: 12px;
+        padding: 0.7rem 1rem; font-weight: 700; font-size: 1rem;
+        transition: transform 0.15s ease;
+    }
+    .stButton>button:hover, .stDownloadButton>button:hover { transform: translateY(-2px); }
+
+    section[data-testid="stSidebar"] { background: linear-gradient(180deg, #12142b 0%, #0a0c1a 100%); }
+
+    .footer-note { text-align: center; color: #8a8ca8; font-size: 0.82rem; margin-top: 1.5rem; }
+
+    .badge {
+        display: inline-block; padding: 0.25rem 0.7rem; border-radius: 999px;
+        font-size: 0.78rem; font-weight: 700; background: rgba(143,107,255,0.18);
+        color: #c9c1ff; border: 1px solid rgba(143,107,255,0.35);
+    }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ── Load Model Artifacts ──────────────────────────────────────
-MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+REPORT_DIR = os.path.join(os.path.dirname(__file__), "..", "report")
+
 
 @st.cache_resource
 def load_artifacts():
-    model     = pickle.load(open(os.path.join(MODEL_DIR, 'best_model.pkl'), 'rb'))
-    scaler    = pickle.load(open(os.path.join(MODEL_DIR, 'scaler.pkl'), 'rb'))
-    le_target = pickle.load(open(os.path.join(MODEL_DIR, 'label_encoder.pkl'), 'rb'))
-    features  = pickle.load(open(os.path.join(MODEL_DIR, 'feature_names.pkl'), 'rb'))
-    # The exact LabelEncoders fit at training time — using these instead of
-    # hand-typed maps guarantees inputs are encoded exactly the way the
-    # model expects (same class-to-number mapping, same class set).
-    cat_encoders = pickle.load(open(os.path.join(MODEL_DIR, 'cat_encoders.pkl'), 'rb'))
-    return model, scaler, le_target, features, cat_encoders
+    model = pickle.load(open(os.path.join(MODEL_DIR, "best_model.pkl"), "rb"))
+    scaler = pickle.load(open(os.path.join(MODEL_DIR, "scaler.pkl"), "rb"))
+    le_target = pickle.load(open(os.path.join(MODEL_DIR, "label_encoder.pkl"), "rb"))
+    features = pickle.load(open(os.path.join(MODEL_DIR, "feature_names.pkl"), "rb"))
+    cat_encoders = pickle.load(open(os.path.join(MODEL_DIR, "cat_encoders.pkl"), "rb"))
+    meta_path = os.path.join(MODEL_DIR, "model_meta.pkl")
+    meta = pickle.load(open(meta_path, "rb")) if os.path.exists(meta_path) else None
+    return model, scaler, le_target, features, cat_encoders, meta
+
 
 try:
-    model, scaler, le_target, feature_names, cat_encoders = load_artifacts()
+    model, scaler, le_target, feature_names, cat_encoders, model_meta = load_artifacts()
     model_loaded = True
 except Exception as e:
     model_loaded = False
-    st.error(f"⚠️ Model not found. Please run `02_model_training.py` first.\n\nError: {e}")
+    st.error(f"⚠️ Model not found. Please run the training script first.\n\nError: {e}")
 
-GENDER_OPTIONS     = list(cat_encoders['Gender'].classes_) if model_loaded else ['Female', 'Male']
-OCCUPATION_OPTIONS = list(cat_encoders['Occupation'].classes_) if model_loaded else []
-BMI_OPTIONS        = list(cat_encoders['BMI Category'].classes_) if model_loaded else []
+GENDER_OPTIONS = list(cat_encoders["Gender"].classes_) if model_loaded else ["Female", "Male"]
+OCCUPATION_OPTIONS = list(cat_encoders["Occupation"].classes_) if model_loaded else []
+BMI_OPTIONS = list(cat_encoders["BMI Category"].classes_) if model_loaded else []
 
-# ── Header ────────────────────────────────────────────────────
-# ── Professional Header ───────────────────────────────────────
+MODEL_NAME = model_meta["model_name"] if model_meta else type(model).__name__
+TEST_ACC = model_meta["test_accuracy"] if model_meta else None
+CV_ACC = model_meta["cv_accuracy"] if model_meta else None
 
-st.markdown("""
-<div style="
-background: linear-gradient(135deg, #0f172a, #2563eb);
-padding:30px;
-border-radius:18px;
-text-align:center;
-margin-bottom:25px;
-box-shadow:0 10px 30px rgba(0,0,0,0.25);
-">
+RESULT_META = {
+    "None": {"emoji": "🟢", "css": "none", "color": "#4CAF50",
+              "advice": "Your sleep patterns look healthy! Keep up your current routine — "
+                        "consistent bedtime, good activity levels, and manageable stress."},
+    "Insomnia": {"emoji": "🟠", "css": "insomnia", "color": "#FF9800",
+                 "advice": "Signs consistent with insomnia were detected. Consider a consistent "
+                           "sleep schedule, reduce screen time before bed, limit caffeine, and "
+                           "consult a doctor if symptoms persist."},
+    "Sleep Apnea": {"emoji": "🔴", "css": "apnea", "color": "#E91E63",
+                    "advice": "Signs consistent with sleep apnea were detected. Please consult a "
+                              "healthcare professional — a sleep study can give a proper diagnosis."},
+}
 
-<h1 style="
-color:white;
-font-size:40px;
-margin-bottom:8px;
-font-weight:700;
-">
-🛌 Sleep Disorder Prediction
-</h1>
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-<p style="
-color:#e2e8f0;
-font-size:18px;
-margin:0;
-">
-Using Wearable Sensor Data & Machine Learning
-</p>
 
+def encode_and_predict(input_dict):
+    """Shared prediction path used by both single and batch prediction."""
+    input_df = pd.DataFrame([input_dict])
+    for col in feature_names:
+        if col not in input_df.columns:
+            input_df[col] = 0
+    input_df = input_df[feature_names]
+    input_scaled = scaler.transform(input_df)
+    pred = model.predict(input_scaled)[0]
+    proba = model.predict_proba(input_scaled)[0]
+    label = le_target.inverse_transform([pred])[0]
+    return label, proba
+
+
+def build_pdf_report(input_dict_display, label, proba, classes):
+    """Generate an in-memory PDF report for a single prediction."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("TitleX", parent=styles["Title"], textColor=colors.HexColor("#4a3fb5"))
+    section_style = ParagraphStyle("SectionX", parent=styles["Heading2"], spaceBefore=14, textColor=colors.HexColor("#2b2b4a"))
+    meta = RESULT_META.get(label, RESULT_META["None"])
+
+    story = [
+        Paragraph("Sleep Disorder Prediction Report", title_style),
+        Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]),
+        Spacer(1, 14),
+        Paragraph(f"Result: {label}", section_style),
+        Paragraph(f"Confidence: {max(proba) * 100:.1f}%", styles["Normal"]),
+        Paragraph(meta["advice"], styles["Normal"]),
+        Spacer(1, 10),
+        Paragraph("Probability Breakdown", section_style),
+    ]
+
+    prob_table_data = [["Class", "Probability"]] + [
+        [c, f"{p * 100:.1f}%"] for c, p in zip(classes, proba)
+    ]
+    prob_table = Table(prob_table_data, colWidths=[3 * inch, 2 * inch])
+    prob_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6a5cff")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(prob_table)
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph("Input Data", section_style))
+    input_table_data = [["Field", "Value"]] + [[k, str(v)] for k, v in input_dict_display.items()]
+    input_table = Table(input_table_data, colWidths=[3 * inch, 2 * inch])
+    input_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4facfe")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(input_table)
+
+    story.append(Spacer(1, 18))
+    story.append(Paragraph(
+        "Disclaimer: This report is generated by a machine learning model for educational "
+        "purposes only. It is not a medical diagnosis. Please consult a healthcare "
+        "professional for any health concerns.",
+        ParagraphStyle("Disclaimer", parent=styles["Italic"], fontSize=8, textColor=colors.grey),
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
+
+
+# ── Hero Header ───────────────────────────────────────────────
+acc_str = f"{TEST_ACC * 100:.1f}%" if TEST_ACC else "N/A"
+st.markdown(
+    f"""
+<div class="hero">
+    <h1>🛌 Sleep Disorder Predictor</h1>
+    <p>AI-powered insight from your wearable & lifestyle data — Insomnia, Sleep Apnea, or all clear.</p>
+    <div style="margin-top:0.9rem;"><span class="badge">Model: {MODEL_NAME} · {acc_str} test accuracy</span></div>
 </div>
-""", unsafe_allow_html=True)
-
-# ── Sidebar: About ────────────────────────────────────────────
-# ── Professional Sidebar ──────────────────────────────────────
-
-with st.sidebar:
-
-    st.markdown("""
-    <div style="
-    background:linear-gradient(135deg,#2563eb,#1e40af);
-    padding:18px;
-    border-radius:15px;
-    text-align:center;
-    color:white;
-    ">
-        <h2>🛌 Sleep Disorder</h2>
-        <p>Healthcare Prediction System</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("")
-
-    st.success("🟢 System Status : Online")
-
-    st.metric(
-        label="🎯 Model Test Accuracy",
-        value="96.0%"
-    )
-
-    st.metric(
-        label="⚡ Response Time",
-        value="< 1 sec"
-    )
-
-    st.divider()
-
-    st.subheader("🩺 Disorders")
-
-    st.markdown("""
-    🟢 **Healthy Sleep**
-
-    🟠 **Insomnia**
-
-    🔴 **Sleep Apnea**
-    """)
-
-    st.divider()
-
-    st.subheader("🤖 AI Model")
-
-    st.markdown("""
-    ✔ Random Forest
-
-    ✔ Gradient Boosting
-
-    ✔ Logistic Regression
-
-    ✔ XGBoost
-    """)
-
-    st.divider()
-
-    st.subheader("📋 Prediction Steps")
-
-    st.markdown("""
-    **1️⃣ Enter Patient Information**
-
-    **2️⃣ Fill Health Metrics**
-
-    **3️⃣ Click Predict**
-
-    **4️⃣ View AI Analysis**
-    """)
-
-    st.divider()
-
-    st.subheader("💡 Tips")
-
-    st.info("""
-✔ Sleep 7–9 hours
-
-✔ Exercise regularly
-
-✔ Reduce stress
-
-✔ Avoid caffeine before bed
-
-✔ Maintain a regular sleep schedule
-""")
-
-    st.divider()
-
-    st.caption("Version 2.0")
-colA, colB, colC, colD = st.columns(4)
-
-with colA:
-    st.metric("🎯 Accuracy", "96.0%")
-
-with colB:
-    st.metric("🤖 Model", "Random Forest")
-
-with colC:
-    st.metric("📊 Features", "12")
-
-with colD:
-    st.metric("⚡ Response", "<1 sec")
-
-# ── Input Form ────────────────────────────────────────────────
-st.markdown("""
-<div style="
-background: linear-gradient(135deg,#4f46e5,#2563eb);
-padding:18px;
-border-radius:8px;
-border:1px solid rgba(255,255,255,0.15);
-margin-bottom:15px;
-text-align:center;
-color:white;
-box-shadow:0 4px 12px rgba(0,0,0,0.15);
-">
-<h2>📋 Patient Health Information</h2>
-<p>Please provide the following details for AI-based sleep disorder prediction.</p>
-</div>
-""", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1,1,1], gap="large")
-
-with col1:
-            st.markdown("""
-        ### 👤 Personal Information
-        Please enter your demographic details.
-        """)
-            gender = st.selectbox("Gender", GENDER_OPTIONS)
-            age    = st.slider("Age", 18, 80, 30)
-            occupation = st.selectbox("Occupation", OCCUPATION_OPTIONS)
-
-with col2:
-            st.markdown("""
-        ### ❤️ Health Metrics
-        Current physiological measurements.
-        """)
-            sleep_duration   = st.slider("Sleep Duration (hrs)", 4.0, 10.0, 7.0, 0.1)
-            quality_of_sleep = st.slider("Quality of Sleep (1-10)", 1, 10, 7)
-            heart_rate       = st.slider("Heart Rate (bpm)", 50, 100, 72)
-            systolic_bp      = st.slider("Systolic BP (mmHg)", 90, 180, 120)
-            diastolic_bp     = st.slider("Diastolic BP (mmHg)", 60, 120, 80)
-
-with col3:
-                st.markdown("""
-            ### 🏃 Lifestyle Information
-            Daily habits and activity level.
-            """)
-                physical_activity = st.slider("Physical Activity Level (min/day)", 0, 120, 45)
-                stress_level = st.slider("Stress Level (1-10)", 1, 10, 5)
-                bmi_category = st.selectbox("BMI Category", BMI_OPTIONS)
-                daily_steps = st.slider("Daily Steps", 1000, 20000, 8000, 500)
-
-st.divider()
-
-predict = st.button(
-    "🧠 Analyze Sleep Health",
-    type="primary",
-    use_container_width=True,
+""",
+    unsafe_allow_html=True,
 )
 
-if predict:
-    if not model_loaded:
-        st.error("Model not loaded. Please train the model first.")
-    else:
-        # Encode inputs using the SAME encoders fit during training
-        gender_enc = int(cat_encoders['Gender'].transform([gender])[0])
-        occ_enc    = int(cat_encoders['Occupation'].transform([occupation])[0])
-        bmi_enc    = int(cat_encoders['BMI Category'].transform([bmi_category])[0])
+# ── Sidebar ───────────────────────────────────────────────────
+with st.sidebar:
+    st.image("https://img.icons8.com/fluency/96/sleeping.png", width=70)
+    st.markdown("### About This App")
+    st.markdown(
+        """
+This app uses **Machine Learning** to predict sleep disorders from health & lifestyle data.
 
-        # Build input row — must match feature_names order from training
-        input_dict = {
-            'Gender': gender_enc,
-            'Age': age,
-            'Occupation': occ_enc,
-            'Sleep Duration': sleep_duration,
-            'Quality of Sleep': quality_of_sleep,
-            'Physical Activity Level': physical_activity,
-            'Stress Level': stress_level,
-            'BMI Category': bmi_enc,
-            'Heart Rate': heart_rate,
-            'Daily Steps': daily_steps,
-            'Systolic_BP': systolic_bp,
-            'Diastolic_BP': diastolic_bp,
-        }
+**Disorders Detected**
+- 🟢 None
+- 🟠 Insomnia
+- 🔴 Sleep Apnea
 
-        # Build dataframe with correct column order
-        input_df = pd.DataFrame([input_dict])
-        # Reindex to match training feature order
-        for col in feature_names:
-            if col not in input_df.columns:
-                input_df[col] = 0
-        input_df = input_df[feature_names]
+**How to use**
+1. Fill in your health data (or upload a CSV for batch predictions)
+2. Click **Predict**
+3. Review your result, download a PDF report, and check your session history
+        """
+    )
+    st.divider()
+    if TEST_ACC:
+        st.metric("🎯 Test Accuracy", f"{TEST_ACC*100:.1f}%")
+    if CV_ACC:
+        st.metric("📐 Cross-Val Accuracy", f"{CV_ACC*100:.1f}%")
+    st.caption(f"Best model selected via grid search: **{MODEL_NAME}**")
+    st.divider()
+    st.markdown("**Dataset:** Sleep Health & Lifestyle Dataset (Kaggle)")
+    st.markdown("**Models Tried:** Logistic Regression, Random Forest, Gradient Boosting, SVM, XGBoost")
+    st.divider()
+    st.caption("⚠️ Educational tool only — not a medical diagnosis.")
 
-        # Scale & predict
-        input_scaled = scaler.transform(input_df)
-        prediction   = model.predict(input_scaled)[0]
-        proba        = model.predict_proba(input_scaled)[0]
-        label        = le_target.inverse_transform([prediction])[0]
+# ── Tabs ──────────────────────────────────────────────────────
+tab_predict, tab_batch, tab_history, tab_insights, tab_about = st.tabs(
+    ["🔮 Predict", "📁 Batch Predict", "🕓 History", "📊 Data Insights", "ℹ️ About"]
+)
 
-        # ── Result Display ─────────────────────────────────────
-        res_col1, res_col2 = st.columns([1, 1])
+# =================================================================
+# PREDICT TAB
+# =================================================================
+with tab_predict:
+    with st.form("predict_form"):
+        st.markdown("#### 📋 Enter Your Health Data")
+        col1, col2, col3 = st.columns(3)
 
-        with res_col1:
-            confidence = max(proba) * 100
+        with col1:
+            st.markdown('<div class="card"><h4>👤 Personal Info</h4>', unsafe_allow_html=True)
+            gender = st.selectbox("Gender", GENDER_OPTIONS)
+            age = st.slider("Age", 18, 80, 30)
+            occupation = st.selectbox("Occupation", OCCUPATION_OPTIONS)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            if label == "None":
-                bg = "#ECFDF5"
-                border = "#22C55E"
-                icon = "🟢"
-            elif label == "Insomnia":
-                bg = "#FFF7ED"
-                border = "#F59E0B"
-                icon = "🟠"
-            else:
-                bg = "#FEF2F2"
-                border = "#EF4444"
-                icon = "🔴"
+        with col2:
+            st.markdown('<div class="card"><h4>❤️ Health Metrics</h4>', unsafe_allow_html=True)
+            sleep_duration = st.slider("Sleep Duration (hrs)", 4.0, 10.0, 7.0, 0.1)
+            quality_of_sleep = st.slider("Quality of Sleep (1-10)", 1, 10, 7)
+            heart_rate = st.slider("Heart Rate (bpm)", 50, 100, 72)
+            systolic_bp = st.slider("Systolic BP (mmHg)", 90, 180, 120)
+            diastolic_bp = st.slider("Diastolic BP (mmHg)", 60, 120, 80)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown(f"""
-            <div style="
-            background:{bg};
-            border-left:8px solid {border};
-            padding:22px;
-            border-radius:12px;
-            box-shadow:0 4px 15px rgba(0,0,0,0.08);
-            ">
+        with col3:
+            st.markdown('<div class="card"><h4>🏃 Lifestyle Metrics</h4>', unsafe_allow_html=True)
+            physical_activity = st.slider("Physical Activity Level (min/day)", 0, 120, 45)
+            stress_level = st.slider("Stress Level (1-10)", 1, 10, 5)
+            bmi_category = st.selectbox("BMI Category", BMI_OPTIONS)
+            daily_steps = st.slider("Daily Steps", 1000, 20000, 8000, 500)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            <h2 style="margin:0;color:#111827;">
-            {icon} AI Prediction Result
-            </h2>
+        submitted = st.form_submit_button("🔍 Predict Sleep Disorder", use_container_width=True)
 
-            <hr>
+    if submitted:
+        if not model_loaded:
+            st.error("Model not loaded. Please train the model first.")
+        else:
+            gender_enc = int(cat_encoders["Gender"].transform([gender])[0])
+            occ_enc = int(cat_encoders["Occupation"].transform([occupation])[0])
+            bmi_enc = int(cat_encoders["BMI Category"].transform([bmi_category])[0])
 
-            <h1 style="color:{border};margin-bottom:5px;">
-            {label}
-            </h1>
-
-            <h3 style="color:#374151;">
-            Confidence : {confidence:.1f}%
-            </h3>
-
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Advice
-            advice = {
-                "None":        "✅ Your sleep patterns look healthy! Maintain your routine.",
-                "Insomnia":    "⚠️ Signs of insomnia detected. Consider a consistent sleep schedule, reduce screen time before bed, and consult a doctor if symptoms persist.",
-                "Sleep Apnea": "🚨 Possible sleep apnea detected. Please consult a healthcare professional for a proper sleep study."
+            input_dict = {
+                "Gender": gender_enc, "Age": age, "Occupation": occ_enc,
+                "Sleep Duration": sleep_duration, "Quality of Sleep": quality_of_sleep,
+                "Physical Activity Level": physical_activity, "Stress Level": stress_level,
+                "BMI Category": bmi_enc, "Heart Rate": heart_rate, "Daily Steps": daily_steps,
+                "Systolic_BP": systolic_bp, "Diastolic_BP": diastolic_bp,
             }
-            st.info(advice.get(label, ""))
-            # Risk Level
-            st.markdown("### 🚦 Risk Level")
+            label, proba = encode_and_predict(input_dict)
+            meta = RESULT_META.get(label, RESULT_META["None"])
 
-            if confidence >= 90:
-                st.success("🟢 Low Risk")
-            elif confidence >= 75:
-                st.warning("🟡 Moderate Risk")
-            else:
-                st.error("🔴 High Risk")
+            display_dict = {
+                "Gender": gender, "Age": age, "Occupation": occupation,
+                "Sleep Duration (hrs)": sleep_duration, "Quality of Sleep": quality_of_sleep,
+                "Physical Activity (min/day)": physical_activity, "Stress Level": stress_level,
+                "BMI Category": bmi_category, "Heart Rate (bpm)": heart_rate,
+                "Daily Steps": daily_steps, "Systolic BP": systolic_bp, "Diastolic BP": diastolic_bp,
+            }
 
+            st.session_state.history.append({
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                **display_dict,
+                "Prediction": label,
+                "Confidence": f"{max(proba)*100:.1f}%",
+            })
 
-            # Health Score
-            st.markdown("### ❤️ Sleep Health Score")
+            st.divider()
+            res_col1, res_col2 = st.columns([1, 1])
 
-            health_score = (
-                quality_of_sleep * 10
-                + sleep_duration * 5
-                + physical_activity * 0.15
-                - stress_level * 3
-            )
-
-            health_score = max(0, min(100, int(health_score)))
-
-            st.progress(health_score / 100)
-
-            st.metric(
-                label="Overall Score",
-                value=f"{health_score}/100"
-            )
-
-        with res_col2:
-
-            st.subheader("📊 Prediction Confidence")
-
-            fig = go.Figure()
-
-            fig.add_trace(
-                go.Bar(
-                    y=le_target.classes_,
-                    x=proba * 100,
-                    orientation="h",
-                    text=[f"{x:.1f}%" for x in proba * 100],
-                    textposition="outside",
-                    marker_color=[
-                        "#22C55E",
-                        "#F59E0B",
-                        "#EF4444"
-                    ]
+            with res_col1:
+                st.markdown(
+                    f"""<div class="result-box {meta['css']}">
+                        <div class="label">{meta['emoji']} {label}</div>
+                        <div class="sub">Confidence: {max(proba) * 100:.1f}%</div>
+                    </div>""",
+                    unsafe_allow_html=True,
                 )
-            )
 
-            fig.update_layout(
-                height=320,
-                xaxis_title="Confidence (%)",
-                yaxis_title="",
-                template="plotly_white",
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
+                gauge = go.Figure(go.Indicator(
+                    mode="gauge+number", value=max(proba) * 100,
+                    number={"suffix": "%", "font": {"color": "white"}},
+                    gauge={"axis": {"range": [0, 100], "tickcolor": "white"},
+                           "bar": {"color": meta["color"]},
+                           "bgcolor": "rgba(255,255,255,0.05)", "borderwidth": 0},
+                    domain={"x": [0, 1], "y": [0, 1]},
+                ))
+                gauge.update_layout(height=220, margin=dict(l=20, r=20, t=10, b=10),
+                                     paper_bgcolor="rgba(0,0,0,0)", font={"color": "white"})
+                st.plotly_chart(gauge, use_container_width=True)
 
-            st.plotly_chart(fig, use_container_width=True)
+                st.markdown(f'<div class="advice-box">{meta["emoji"]} {meta["advice"]}</div>', unsafe_allow_html=True)
+
+                pdf_buf = build_pdf_report(display_dict, label, proba, list(le_target.classes_))
+                st.download_button(
+                    "📄 Download PDF Report", data=pdf_buf,
+                    file_name=f"sleep_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf", use_container_width=True,
+                )
+
+            with res_col2:
+                classes = list(le_target.classes_)
+                colors_list = [RESULT_META.get(c, {}).get("color", "#8f6bff") for c in classes]
+                bar = go.Figure(go.Bar(
+                    x=proba * 100, y=classes, orientation="h", marker_color=colors_list,
+                    text=[f"{v:.1f}%" for v in proba * 100], textposition="outside",
+                ))
+                bar.update_layout(
+                    title="Prediction Probability by Class", xaxis_title="Probability (%)",
+                    xaxis_range=[0, 100], height=320, margin=dict(l=10, r=30, t=50, b=10),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "white"},
+                )
+                st.plotly_chart(bar, use_container_width=True)
+
+# =================================================================
+# BATCH PREDICT TAB
+# =================================================================
+with tab_batch:
+    st.markdown("#### 📁 Batch Predictions from CSV")
+    st.caption(
+        "Upload a CSV with columns: Gender, Age, Occupation, Sleep Duration, Quality of Sleep, "
+        "Physical Activity Level, Stress Level, BMI Category, Heart Rate, Daily Steps, "
+        "Systolic_BP, Diastolic_BP — using the same category names shown in the Predict tab "
+        "dropdowns (e.g. Gender as 'Male'/'Female', not numbers)."
+    )
+
+    template_df = pd.DataFrame([{
+        "Gender": "Male", "Age": 30, "Occupation": "Software Engineer",
+        "Sleep Duration": 7.0, "Quality of Sleep": 7, "Physical Activity Level": 45,
+        "Stress Level": 5, "BMI Category": "Normal", "Heart Rate": 72,
+        "Daily Steps": 8000, "Systolic_BP": 120, "Diastolic_BP": 80,
+    }])
+    st.download_button(
+        "⬇️ Download CSV Template", data=template_df.to_csv(index=False),
+        file_name="batch_template.csv", mime="text/csv",
+    )
+
+    uploaded = st.file_uploader("Upload your CSV", type=["csv"])
+
+    if uploaded is not None and model_loaded:
+        try:
+            batch_df = pd.read_csv(uploaded)
+            required_cols = ["Gender", "Age", "Occupation", "Sleep Duration", "Quality of Sleep",
+                              "Physical Activity Level", "Stress Level", "BMI Category",
+                              "Heart Rate", "Daily Steps", "Systolic_BP", "Diastolic_BP"]
+            missing = [c for c in required_cols if c not in batch_df.columns]
+            if missing:
+                st.error(f"Missing required columns: {', '.join(missing)}")
+            else:
+                results = []
+                errors = []
+                for idx, row in batch_df.iterrows():
+                    try:
+                        gender_enc = int(cat_encoders["Gender"].transform([row["Gender"]])[0])
+                        occ_enc = int(cat_encoders["Occupation"].transform([row["Occupation"]])[0])
+                        bmi_enc = int(cat_encoders["BMI Category"].transform([row["BMI Category"]])[0])
+                        input_dict = {
+                            "Gender": gender_enc, "Age": row["Age"], "Occupation": occ_enc,
+                            "Sleep Duration": row["Sleep Duration"], "Quality of Sleep": row["Quality of Sleep"],
+                            "Physical Activity Level": row["Physical Activity Level"], "Stress Level": row["Stress Level"],
+                            "BMI Category": bmi_enc, "Heart Rate": row["Heart Rate"], "Daily Steps": row["Daily Steps"],
+                            "Systolic_BP": row["Systolic_BP"], "Diastolic_BP": row["Diastolic_BP"],
+                        }
+                        label, proba = encode_and_predict(input_dict)
+                        results.append({**row.to_dict(), "Predicted Disorder": label,
+                                         "Confidence": f"{max(proba)*100:.1f}%"})
+                    except Exception as row_err:
+                        errors.append(f"Row {idx + 1}: {row_err}")
+                        results.append({**row.to_dict(), "Predicted Disorder": "ERROR", "Confidence": "-"})
+
+                result_df = pd.DataFrame(results)
+                st.success(f"✅ Processed {len(result_df)} rows ({len(errors)} error(s))")
+                if errors:
+                    with st.expander("⚠️ Rows with errors (e.g. unrecognized category values)"):
+                        for e in errors:
+                            st.write(e)
+
+                st.dataframe(result_df, use_container_width=True)
+
+                dist = result_df["Predicted Disorder"].value_counts()
+                dist_fig = go.Figure(go.Bar(
+                    x=dist.index, y=dist.values,
+                    marker_color=[RESULT_META.get(c, {}).get("color", "#8f6bff") for c in dist.index],
+                ))
+                dist_fig.update_layout(
+                    title="Predicted Class Distribution", height=300,
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "white"},
+                )
+                st.plotly_chart(dist_fig, use_container_width=True)
+
+                st.download_button(
+                    "⬇️ Download Results CSV", data=result_df.to_csv(index=False),
+                    file_name=f"batch_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv", use_container_width=True,
+                )
+        except Exception as e:
+            st.error(f"Could not process the uploaded file: {e}")
+
+# =================================================================
+# HISTORY TAB
+# =================================================================
+with tab_history:
+    st.markdown("#### 🕓 Your Prediction History (this session)")
+    st.caption("Resets when you close or refresh the browser tab — download it if you want to keep it.")
+
+    if not st.session_state.history:
+        st.info("No predictions yet. Run one from the Predict tab and it will show up here.")
+    else:
+        hist_df = pd.DataFrame(st.session_state.history)
+        st.dataframe(hist_df, use_container_width=True)
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.download_button(
+                "⬇️ Download History CSV", data=hist_df.to_csv(index=False),
+                file_name="prediction_history.csv", mime="text/csv", use_container_width=True,
+            )
+        with col_b:
+            if st.button("🗑️ Clear History", use_container_width=True):
+                st.session_state.history = []
+                st.rerun()
+
+# =================================================================
+# INSIGHTS TAB
+# =================================================================
+with tab_insights:
+    st.markdown("#### 📊 Exploratory Data Analysis & Model Performance")
+    st.caption("Generated from the training dataset during model development.")
+
+    insight_files = [
+        ("eda_plots.png", "Exploratory Data Analysis"),
+        ("correlation_heatmap.png", "Feature Correlation Heatmap"),
+        ("feature_importance.png", "Feature Importance"),
+        ("model_comparison.png", "Model Comparison (grid-searched)"),
+    ]
+    for fname, caption in insight_files:
+        fpath = os.path.join(REPORT_DIR, fname)
+        if os.path.exists(fpath):
+            st.markdown(f'<div class="card"><h4>{caption}</h4>', unsafe_allow_html=True)
+            st.image(fpath, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# =================================================================
+# ABOUT TAB
+# =================================================================
+with tab_about:
+    params_str = ", ".join(f"{k}={v}" for k, v in model_meta["params"].items()) if model_meta else "N/A"
+    st.markdown(
+        f"""
+<div class="card">
+<h4>🛌 About This Project</h4>
+Sleep disorders like insomnia and sleep apnea affect millions of people. Early prediction using
+wearable sensor and lifestyle data can help avoid expensive clinical tests.
+
+<br><br><b>Features used:</b> Age, Gender, Occupation, Sleep Duration, Quality of Sleep,
+Physical Activity Level, Stress Level, BMI Category, Heart Rate, Daily Steps, Blood Pressure.
+
+<br><br><b>Output classes:</b> None, Insomnia, Sleep Apnea.
+
+<br><br><b>Best model:</b> {MODEL_NAME} (selected via grid search across Logistic Regression,
+Random Forest, Gradient Boosting, SVM, and XGBoost)
+<br><b>Tuned hyperparameters:</b> {params_str}
+<br><b>Test accuracy:</b> {acc_str} &nbsp;|&nbsp; <b>5-fold CV accuracy:</b> {f"{CV_ACC*100:.1f}%" if CV_ACC else "N/A"}
+
+<br><br><b>Tech stack:</b> Python, scikit-learn, XGBoost, Streamlit, Plotly, ReportLab.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    st.warning(
+        "⚠️ This tool is for educational purposes only. Always consult a healthcare "
+        "professional for medical diagnosis."
+    )
 
 # ── Footer ────────────────────────────────────────────────────
-st.divider()
-st.markdown("""
-<p style="text-align:center; color:#888; font-size:0.85rem;">
-⚠️ This tool is for educational purposes only. Always consult a healthcare professional for medical advice.<br>
-B.Tech Final Year Mini Project | Sleep Disorder Prediction Using Wearable Sensor Data
-</p>
-""", unsafe_allow_html=True)
+st.markdown(
+    '<p class="footer-note">B.Tech Final Year Mini Project | Sleep Disorder Prediction Using Wearable Sensor Data</p>',
+    unsafe_allow_html=True,
+)
