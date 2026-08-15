@@ -114,6 +114,7 @@ try:
     model, scaler, le_target, feature_names, cat_encoders, model_meta = load_artifacts()
     model_loaded = True
 except Exception as e:
+    model, scaler, le_target, feature_names, cat_encoders, model_meta = None, None, None, [], {}, None
     model_loaded = False
     st.error(f"⚠️ Model not found. Please run the training script first.\n\nError: {e}")
 
