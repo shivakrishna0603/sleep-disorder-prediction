@@ -99,15 +99,6 @@ st.markdown(
     .result-box .label { font-size: 1.7rem; font-weight: 800; margin-bottom: 0.2rem; }
     .result-box .sub { font-size: 0.95rem; opacity: 0.85; font-weight: 600; }
 
-    .result-banner {
-        display: flex; align-items: center; gap: 1.4rem;
-        padding: 1.6rem 2rem; border-radius: 22px;
-        border: 3px solid var(--ink); box-shadow: 7px 7px 0px rgba(35,38,74,0.18);
-    }
-    .result-banner-emoji { font-size: 3.2rem; line-height: 1; }
-    .result-banner-label { font-size: 2rem; font-weight: 800; }
-    .result-banner-sub { font-size: 1rem; font-weight: 600; opacity: 0.85; margin-top: 0.2rem; }
-
     .none      { background: #DFFBF3; color: #00816D; }
     .insomnia  { background: #FFF3D6; color: #B4780A; }
     .apnea     { background: #FFE3E0; color: #D53C2D; }
@@ -403,7 +394,6 @@ with tab_predict:
             }
             label, proba = encode_and_predict(input_dict)
             meta = RESULT_META.get(label, RESULT_META["None"])
-            confidence = max(proba) * 100
 
             display_dict = {
                 "Gender": gender, "Age": age, "Occupation": occupation,
@@ -417,88 +407,55 @@ with tab_predict:
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 **display_dict,
                 "Prediction": label,
-                "Confidence": f"{confidence:.1f}%",
+                "Confidence": f"{max(proba)*100:.1f}%",
             })
 
-            if label == "None":
-                st.balloons()
-
-            st.markdown("<div style='margin: 2rem 0 1rem;'></div>", unsafe_allow_html=True)
-
-            # ── Big result banner ──────────────────────────────
-            st.markdown(
-                f"""
-                <div class="result-banner {meta['css']}">
-                    <div class="result-banner-emoji">{meta['emoji']}</div>
-                    <div class="result-banner-text">
-                        <div class="result-banner-label">{label}</div>
-                        <div class="result-banner-sub">Predicted with {confidence:.1f}% confidence</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            st.markdown(f'<div class="advice-box" style="margin-top:1rem;">{meta["emoji"]} {meta["advice"]}</div>', unsafe_allow_html=True)
-
-            st.markdown("<div style='margin: 1.6rem 0 0.6rem;'></div>", unsafe_allow_html=True)
-            res_col1, res_col2 = st.columns([1, 1.1])
+            st.divider()
+            res_col1, res_col2 = st.columns([1, 1])
 
             with res_col1:
-                st.markdown('<div class="card"><h4>🎯 Confidence Level</h4>', unsafe_allow_html=True)
+                st.markdown(
+                    f"""<div class="result-box {meta['css']}">
+                        <div class="label">{meta['emoji']} {label}</div>
+                        <div class="sub">Confidence: {max(proba) * 100:.1f}%</div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+
                 gauge = go.Figure(go.Indicator(
-                    mode="gauge+number", value=confidence,
-                    number={"suffix": "%", "font": {"color": "#23264A", "size": 40}},
+                    mode="gauge+number", value=max(proba) * 100,
+                    number={"suffix": "%", "font": {"color": "white"}},
                     gauge={"axis": {"range": [0, 100], "tickcolor": "#23264A"},
                            "bar": {"color": meta["color"]},
                            "bgcolor": "rgba(35,38,74,0.06)", "borderwidth": 2, "bordercolor": "#23264A"},
                     domain={"x": [0, 1], "y": [0, 1]},
                 ))
-                gauge.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=10),
+                gauge.update_layout(height=220, margin=dict(l=20, r=20, t=10, b=10),
                                      paper_bgcolor="rgba(0,0,0,0)", font={"color": "#23264A"})
                 st.plotly_chart(gauge, use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
+
+                st.markdown(f'<div class="advice-box">{meta["emoji"]} {meta["advice"]}</div>', unsafe_allow_html=True)
 
                 pdf_buf = build_pdf_report(display_dict, label, proba, list(le_target.classes_))
-                dl_col, note_col = st.columns([1, 1])
-                with dl_col:
-                    st.download_button(
-                        "📄 Download PDF Report", data=pdf_buf,
-                        file_name=f"sleep_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                        mime="application/pdf", use_container_width=True,
-                    )
-                with note_col:
-                    st.markdown(
-                        '<div style="text-align:center; padding-top:0.8rem; font-size:0.82rem; color:#7a7d99;">'
-                        '✅ Saved to your History tab</div>', unsafe_allow_html=True,
-                    )
+                st.download_button(
+                    "📄 Download PDF Report", data=pdf_buf,
+                    file_name=f"sleep_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf", use_container_width=True,
+                )
 
             with res_col2:
-                st.markdown('<div class="card"><h4>📊 Probability by Class</h4>', unsafe_allow_html=True)
                 classes = list(le_target.classes_)
-                colors_list = [RESULT_META.get(c, {}).get("color", "#8B7FFF") for c in classes]
+                colors_list = [RESULT_META.get(c, {}).get("color", "#8f6bff") for c in classes]
                 bar = go.Figure(go.Bar(
                     x=proba * 100, y=classes, orientation="h", marker_color=colors_list,
-                    marker_line_color="#23264A", marker_line_width=1.5,
                     text=[f"{v:.1f}%" for v in proba * 100], textposition="outside",
-                    textfont={"color": "#23264A", "size": 13},
                 ))
                 bar.update_layout(
-                    xaxis_title="Probability (%)", xaxis_range=[0, 105],
-                    height=200, margin=dict(l=10, r=30, t=10, b=10),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font={"color": "#23264A"}, showlegend=False,
+                    title="Prediction Probability by Class", xaxis_title="Probability (%)",
+                    xaxis_range=[0, 100], height=320, margin=dict(l=10, r=30, t=50, b=10),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "#23264A"},
                 )
                 st.plotly_chart(bar, use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                with st.expander("📋 Review the data you entered"):
-                    input_summary_df = pd.DataFrame(
-                        [{"Field": k, "Value": v} for k, v in display_dict.items()]
-                    )
-                    st.dataframe(input_summary_df, use_container_width=True, hide_index=True)
-
-
 
 # =================================================================
 # BATCH PREDICT TAB
