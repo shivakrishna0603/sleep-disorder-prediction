@@ -31,7 +31,9 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    #MainMenu, footer, header {visibility: hidden;}
+    #MainMenu, footer {visibility: hidden;}
+    header[data-testid="stHeader"] { background: transparent; }
+    div[data-testid="stToolbar"] { visibility: hidden; }
 
     :root {
         --ink: #23264A;
