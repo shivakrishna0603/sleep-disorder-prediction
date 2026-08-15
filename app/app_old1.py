@@ -33,126 +33,61 @@ st.markdown(
 <style>
     #MainMenu, footer, header {visibility: hidden;}
 
-    :root {
-        --ink: #23264A;
-        --coral: #FF6B5B;
-        --teal: #00C2A8;
-        --yellow: #FFC857;
-        --violet: #8B7FFF;
-        --cream: #FFF9F2;
-    }
-
     .stApp {
-        background: linear-gradient(160deg, #FFF9F2 0%, #F3F0FF 55%, #EAFBF7 100%);
-    }
-
-    /* Default text everywhere: dark navy, not white */
-    .stApp, .stApp p, .stApp li, .stApp span, .stMarkdown, .stMarkdown p,
-    label, .stSelectbox label, .stSlider label {
-        color: var(--ink) !important;
+        background: radial-gradient(circle at 10% 0%, #1b1f3b 0%, #0f1226 45%, #0a0c1a 100%);
     }
 
     .hero {
-        background: linear-gradient(120deg, var(--coral) 0%, #FF9466 45%, var(--yellow) 100%);
-        border-radius: 28px;
-        border: 3px solid var(--ink);
-        box-shadow: 8px 8px 0px var(--ink);
+        background: linear-gradient(135deg, #6a5cff 0%, #8f6bff 45%, #4facfe 100%);
+        border-radius: 24px;
         padding: 2.6rem 2rem;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1.6rem;
+        box-shadow: 0 20px 40px -20px rgba(106, 92, 255, 0.6);
     }
-    .hero h1 { color: white; font-size: 2.5rem; font-weight: 800; margin: 0; letter-spacing: -0.5px; text-shadow: 2px 2px 0 rgba(0,0,0,0.15); }
-    .hero p { color: rgba(255,255,255,0.95); font-size: 1.05rem; margin-top: 0.6rem; font-weight: 500; }
+    .hero h1 { color: white; font-size: 2.4rem; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+    .hero p { color: rgba(255,255,255,0.9); font-size: 1.05rem; margin-top: 0.5rem; }
 
     .card {
-        background: #FFFFFF;
-        border: 2.5px solid var(--ink);
-        border-radius: 20px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
         padding: 1.4rem 1.5rem;
         margin-bottom: 1rem;
-        box-shadow: 5px 5px 0px rgba(35,38,74,0.12);
-        color: var(--ink);
+        backdrop-filter: blur(6px);
     }
-    .card h4 { margin-top: 0; color: var(--ink); font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; }
-    .card p, .card li, .card b { color: var(--ink) !important; }
+    .card h4 { margin-top: 0; color: #e6e6ff; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
 
-    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] li,
-    section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] label {
-        color: var(--ink) !important;
-    }
+    .result-box { padding: 1.8rem; border-radius: 18px; text-align: center; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.08); }
+    .result-box .label { font-size: 1.6rem; font-weight: 800; margin-bottom: 0.2rem; }
+    .result-box .sub { font-size: 0.95rem; opacity: 0.85; }
 
-    .result-box {
-        padding: 1.8rem; border-radius: 20px; text-align: center; margin-bottom: 1rem;
-        border: 3px solid var(--ink); box-shadow: 6px 6px 0px rgba(35,38,74,0.15);
-    }
-    .result-box .label { font-size: 1.7rem; font-weight: 800; margin-bottom: 0.2rem; }
-    .result-box .sub { font-size: 0.95rem; opacity: 0.85; font-weight: 600; }
-
-    .none      { background: #DFFBF3; color: #00816D; }
-    .insomnia  { background: #FFF3D6; color: #B4780A; }
-    .apnea     { background: #FFE3E0; color: #D53C2D; }
+    .none      { background: linear-gradient(135deg, rgba(76,175,80,0.18), rgba(76,175,80,0.05)); color: #7fe08a; }
+    .insomnia  { background: linear-gradient(135deg, rgba(255,152,0,0.20), rgba(255,152,0,0.05)); color: #ffb85c; }
+    .apnea     { background: linear-gradient(135deg, rgba(233,30,99,0.20), rgba(233,30,99,0.05)); color: #ff7fae; }
 
     .advice-box {
-        border-radius: 16px; padding: 1rem 1.2rem; font-size: 0.95rem; font-weight: 500;
-        background: #F3F0FF; border: 2px solid var(--violet); color: var(--ink);
+        border-radius: 14px; padding: 1rem 1.2rem; font-size: 0.95rem;
+        background: rgba(255,255,255,0.05); border-left: 4px solid #8f6bff; color: #e6e6ff;
     }
 
     .stButton>button, .stDownloadButton>button {
-        background: var(--coral);
-        color: white; border: 2.5px solid var(--ink); border-radius: 999px;
-        padding: 0.7rem 1.3rem; font-weight: 800; font-size: 1rem;
-        box-shadow: 4px 4px 0px var(--ink);
-        transition: all 0.12s ease;
+        background: linear-gradient(135deg, #6a5cff, #4facfe);
+        color: white; border: none; border-radius: 12px;
+        padding: 0.7rem 1rem; font-weight: 700; font-size: 1rem;
+        transition: transform 0.15s ease;
     }
-    .stButton>button:hover, .stDownloadButton>button:hover {
-        transform: translate(-2px, -2px); box-shadow: 6px 6px 0px var(--ink);
-        background: #FF7F70;
-    }
-    .stButton>button:active, .stDownloadButton>button:active {
-        transform: translate(1px, 1px); box-shadow: 2px 2px 0px var(--ink);
-    }
+    .stButton>button:hover, .stDownloadButton>button:hover { transform: translateY(-2px); }
 
-    section[data-testid="stSidebar"] {
-        background: #FFF3E9; border-right: 3px solid var(--ink);
-    }
+    section[data-testid="stSidebar"] { background: linear-gradient(180deg, #12142b 0%, #0a0c1a 100%); }
 
-    .footer-note { text-align: center; color: #7a7d99; font-size: 0.82rem; margin-top: 1.5rem; font-weight: 500; }
+    .footer-note { text-align: center; color: #8a8ca8; font-size: 0.82rem; margin-top: 1.5rem; }
 
     .badge {
-        display: inline-block; padding: 0.35rem 0.9rem; border-radius: 999px;
-        font-size: 0.8rem; font-weight: 800; background: white;
-        color: var(--coral); border: 2px solid white;
+        display: inline-block; padding: 0.25rem 0.7rem; border-radius: 999px;
+        font-size: 0.78rem; font-weight: 700; background: rgba(143,107,255,0.18);
+        color: #c9c1ff; border: 1px solid rgba(143,107,255,0.35);
     }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 0.4rem; }
-    .stTabs [data-baseweb="tab"] {
-        background: white; border: 2px solid var(--ink); border-radius: 999px;
-        padding: 0.5rem 1.1rem; font-weight: 700; color: var(--ink);
-    }
-    .stTabs [aria-selected="true"] {
-        background: var(--teal) !important; color: white !important;
-    }
-
-    /* Inputs */
-    .stSelectbox div[data-baseweb="select"] > div, input[type="number"], input[type="text"] {
-        background: white !important; border: 2px solid var(--ink) !important;
-        border-radius: 12px !important; color: var(--ink) !important; font-weight: 600;
-    }
-
-    /* Sliders */
-    div[data-testid="stSlider"] [role="slider"] { background: var(--coral) !important; border: 2px solid var(--ink) !important; }
-    div[data-testid="stSlider"] div[data-baseweb="slider"] > div > div { background: var(--teal) !important; }
-
-    /* Metrics */
-    div[data-testid="stMetric"] {
-        background: white; border: 2px solid var(--ink); border-radius: 16px;
-        padding: 0.8rem; box-shadow: 4px 4px 0px rgba(35,38,74,0.12);
-    }
-    div[data-testid="stMetricValue"] { color: var(--coral) !important; font-weight: 800; }
-
-    /* Dataframe */
-    div[data-testid="stDataFrame"] { border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -192,14 +127,14 @@ TEST_ACC = model_meta["test_accuracy"] if model_meta else None
 CV_ACC = model_meta["cv_accuracy"] if model_meta else None
 
 RESULT_META = {
-    "None": {"emoji": "🟢", "css": "none", "color": "#00C2A8",
+    "None": {"emoji": "🟢", "css": "none", "color": "#4CAF50",
               "advice": "Your sleep patterns look healthy! Keep up your current routine — "
                         "consistent bedtime, good activity levels, and manageable stress."},
-    "Insomnia": {"emoji": "🟠", "css": "insomnia", "color": "#FFC857",
+    "Insomnia": {"emoji": "🟠", "css": "insomnia", "color": "#FF9800",
                  "advice": "Signs consistent with insomnia were detected. Consider a consistent "
                            "sleep schedule, reduce screen time before bed, limit caffeine, and "
                            "consult a doctor if symptoms persist."},
-    "Sleep Apnea": {"emoji": "🔴", "css": "apnea", "color": "#FF6B5B",
+    "Sleep Apnea": {"emoji": "🔴", "css": "apnea", "color": "#E91E63",
                     "advice": "Signs consistent with sleep apnea were detected. Please consult a "
                               "healthcare professional — a sleep study can give a proper diagnosis."},
 }
@@ -414,13 +349,13 @@ with tab_predict:
                 gauge = go.Figure(go.Indicator(
                     mode="gauge+number", value=max(proba) * 100,
                     number={"suffix": "%", "font": {"color": "white"}},
-                    gauge={"axis": {"range": [0, 100], "tickcolor": "#23264A"},
+                    gauge={"axis": {"range": [0, 100], "tickcolor": "white"},
                            "bar": {"color": meta["color"]},
-                           "bgcolor": "rgba(35,38,74,0.06)", "borderwidth": 2, "bordercolor": "#23264A"},
+                           "bgcolor": "rgba(255,255,255,0.05)", "borderwidth": 0},
                     domain={"x": [0, 1], "y": [0, 1]},
                 ))
                 gauge.update_layout(height=220, margin=dict(l=20, r=20, t=10, b=10),
-                                     paper_bgcolor="rgba(0,0,0,0)", font={"color": "#23264A"})
+                                     paper_bgcolor="rgba(0,0,0,0)", font={"color": "white"})
                 st.plotly_chart(gauge, use_container_width=True)
 
                 st.markdown(f'<div class="advice-box">{meta["emoji"]} {meta["advice"]}</div>', unsafe_allow_html=True)
@@ -442,7 +377,7 @@ with tab_predict:
                 bar.update_layout(
                     title="Prediction Probability by Class", xaxis_title="Probability (%)",
                     xaxis_range=[0, 100], height=320, margin=dict(l=10, r=30, t=50, b=10),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "#23264A"},
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "white"},
                 )
                 st.plotly_chart(bar, use_container_width=True)
 
@@ -518,7 +453,7 @@ with tab_batch:
                 ))
                 dist_fig.update_layout(
                     title="Predicted Class Distribution", height=300,
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "#23264A"},
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font={"color": "white"},
                 )
                 st.plotly_chart(dist_fig, use_container_width=True)
 
